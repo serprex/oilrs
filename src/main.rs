@@ -113,6 +113,11 @@ impl<'a> Tape<'a> {
 		let b = self.read_i64();
 		self.tape.insert(b, a);
 	}
+	pub fn op7(&mut self) {
+		self.step();
+		let a = self.read_i64();
+		self.idx = if self.dir { self.idx + a } else { self.idx - a };
+	}
 	pub fn op8(&mut self) {
 		self.step();
 		let a = self.read_i64();
@@ -128,6 +133,19 @@ impl<'a> Tape<'a> {
 			Entry::Occupied(mut ent) => ent.get_mut().decr(),
 			Entry::Vacant(ent) => { ent.insert(Value::I(-1)); },
 		}
+	}
+	pub fn op10(&mut self) {
+		self.step();
+		let ai = self.read_i64();
+		let a = self.read_val(ai);
+		self.step();
+		let bi = self.read_i64();
+		let b = self.read_val(bi);
+		if a != b {
+			self.step();
+		}
+		self.step();
+		self.idx = self.read_i64();
 	}
 	pub fn op12(&mut self) {
 		self.step();
@@ -148,13 +166,13 @@ impl<'a> Tape<'a> {
 		let b = self.read_i64();
 		self.step();
 		let c = self.read_i64();
+		let mut s = String::new();
 		if b > 0 {
-			let mut s = String::new();
 			for b in 0..b {
 				write!(s, "{}", self.read_val(a+b)).ok();
 			}
-			self.tape.insert(c, Value::from(s));
 		}
+		self.tape.insert(c, Value::from(s));
 	}
 	pub fn op14(&mut self) {
 		self.step();
@@ -216,25 +234,13 @@ impl<'a> Tape<'a> {
 							continue
 						},
 						7 => {
-							self.step();
-							let a = self.read_i64();
-							self.idx = if self.dir { self.idx + a } else { self.idx - a };
+							self.op7();
 							continue
 						},
 						8 => self.op8(),
 						9 => self.op9(),
 						10 => {
-							self.step();
-							let a = self.read_i64();
-							let a = self.read_val(a);
-							self.step();
-							let b = self.read_i64();
-							let b = self.read_val(b);
-							if a != b {
-								self.step();
-							}
-							self.step();
-							self.idx = self.read_i64();
+							self.op10();
 							continue
 						},
 						11 => println!(""),
@@ -295,25 +301,13 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 							continue
 						},
 						7 => {
-							self.step();
-							let a = self.read_i64();
-							self.tape.idx = if self.tape.dir { self.tape.idx + a } else { self.tape.idx - a };
+							self.tape.op7();
 							continue
 						},
 						8 => self.tape.op8(),
 						9 => self.tape.op9(),
 						10 => {
-							self.step();
-							let a = self.read_i64();
-							let a = self.read_val(a);
-							self.step();
-							let b = self.read_i64();
-							let b = self.read_val(b);
-							if a != b {
-								self.step();
-							}
-							self.step();
-							self.tape.idx = self.read_i64();
+							self.tape.op10();
 							continue
 						},
 						12 => self.tape.op12(),
