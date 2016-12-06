@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use std::fmt::{self, Display, Write};
 use std::io::{self, BufRead, BufReader};
+use std::path::Path;
 use std::rc::Rc;
 use fnv::FnvHashMap;
 
@@ -59,25 +60,27 @@ impl From<char> for Value {
 	}
 }
 
-struct Tape {
+struct Tape<'a> {
 	pub idx: i64,
 	pub tape: FnvHashMap<i64, Value>,
 	pub dir: bool,
+	pub root: Option<&'a Path>,
 }
 
-struct TapeChild<'a> {
-	pub tape: Tape,
-	pub parent: &'a mut Tape,
+struct TapeChild<'a, 'b: 'a> {
+	pub tape: Tape<'a>,
+	pub parent: &'a mut Tape<'b>,
 	pub iidx: i64,
 	pub oidx: i64,
 }
 
-impl Tape {
-	pub fn new() -> Tape {
+impl<'a> Tape<'a> {
+	pub fn new() -> Tape<'a> {
 		Tape {
 			idx: 0,
 			dir: true,
 			tape: FnvHashMap::default(),
+			root: None,
 		}
 	}
 	pub fn step(&mut self) {
@@ -160,21 +163,23 @@ impl Tape {
 		let oi = self.read_i64();
 		self.step();
 		let ii = self.read_i64();
-		let mut child = TapeChild {
-			tape: Tape::new(),
-			parent: self,
-			oidx: oi,
-			iidx: ii,
-		};
-		if let Ok(f) = fs::File::open(&a[..]) {
+		let path = if let Some(pref) = self.root { pref.join(&a[..]) } else { Path::new(&a[..]).to_path_buf() };
+		if let Ok(f) = fs::File::open(&path) {
+			let mut child = TapeChild {
+				tape: Tape::new(),
+				parent: self,
+				oidx: oi,
+				iidx: ii,
+			};
+			child.tape.root = path.parent();
 			let f = BufReader::new(f);
 			for (idx, line) in f.lines().enumerate() {
 				if let Ok(line) = line {
 					child.tape.tape.insert(idx as i64, Value::from(line));
 				}
 			}
+			child.run();
 		}
-		child.run();
 	}
 	pub fn run(&mut self)
 	{
@@ -247,7 +252,7 @@ impl Tape {
 	}
 }
 
-impl<'p> TapeChild<'p> {
+impl<'p, 'pl> TapeChild<'p, 'pl> {
 	pub fn step(&mut self) {
 		self.tape.step()
 	}
@@ -328,7 +333,8 @@ impl<'p> TapeChild<'p> {
 fn main() {
 	if let Some(a) = env::args().nth(1) {
 		let mut tape = Tape::new();
-		if let Ok(f) = fs::File::open(a) {
+		let path = Path::new(&a);
+		if let Ok(f) = fs::File::open(&path) {
 			let f = BufReader::new(f);
 			for (idx, line) in f.lines().enumerate() {
 				if let Ok(line) = line {
@@ -336,6 +342,7 @@ fn main() {
 				}
 			}
 		}
+		tape.root = path.parent();
 		tape.run();
 	} else {
 		println!("oilrs [filename]");
