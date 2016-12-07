@@ -4,7 +4,7 @@ use std::env;
 use std::fs;
 use std::fmt::{self, Display, Write};
 use std::io::{self, BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use fnv::FnvHashMap;
 
@@ -59,6 +59,7 @@ impl From<char> for Value {
 		}
 	}
 }
+
 
 struct Tape<'a> {
 	pub idx: i64,
@@ -174,33 +175,44 @@ impl<'a> Tape<'a> {
 		}
 		self.tape.insert(c, Value::from(s));
 	}
-	pub fn op14(&mut self) {
-		self.step();
-		let a = self.read_string(self.idx);
-		self.step();
-		let oi = self.read_i64();
-		self.step();
-		let ii = self.read_i64();
-		let path = if let Some(pref) = self.root { pref.join(&a[..]) } else { Path::new(&a[..]).to_path_buf() };
-		if let Ok(f) = fs::File::open(&path) {
-			let mut child = TapeChild {
-				tape: Tape::new(),
-				parent: self,
-				oidx: oi,
-				iidx: ii,
-			};
-			child.tape.root = path.parent();
+	fn run_path(&mut self, oi: i64, ii: i64, path: &Path, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<i64, Value>>) {
+		let mut child = TapeChild {
+			tape: Tape::new(),
+			parent: self,
+			oidx: oi,
+			iidx: ii,
+		};
+		child.tape.root = path.parent();
+		if let Some(m) = modcache.get_mut(path).map(|m| m.clone()) {
+			child.tape.tape = m;
+		}
+		else if let Ok(f) = fs::File::open(&path) {
 			let f = BufReader::new(f);
 			for (idx, line) in f.lines().enumerate() {
 				if let Ok(line) = line {
 					child.tape.tape.insert(idx as i64, Value::from(line));
 				}
 			}
-			child.run();
+			modcache.insert(path.to_path_buf(), child.tape.tape.clone());
+		}
+		child.run(modcache);
+	}
+	pub fn op14(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<i64, Value>>) {
+		self.step();
+		let a = self.read_string(self.idx);
+		self.step();
+		let oi = self.read_i64();
+		self.step();
+		let ii = self.read_i64();
+		if let Some(pref) = self.root {
+			self.run_path(oi, ii, pref.join(&a[..]).as_path(), modcache);
+		} else {
+			self.run_path(oi, ii, Path::new(&a[..]), modcache);
 		}
 	}
 	pub fn run(&mut self)
 	{
+		let mut modcache = FnvHashMap::default();
 		loop {
 			match self.tape.get(&self.idx) {
 				Some(&Value::I(cell)) => {
@@ -246,7 +258,7 @@ impl<'a> Tape<'a> {
 						11 => println!(""),
 						12 => self.op12(),
 						13 => self.op13(),
-						14 => self.op14(),
+						14 => self.op14(&mut modcache),
 						_ => (),
 					}
 				},
@@ -268,7 +280,7 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 	pub fn read_i64(&self) -> i64 {
 		self.tape.read_i64()
 	}
-	pub fn run(&mut self)
+	pub fn run(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<i64, Value>>)
 	{
 		loop {
 			match self.tape.tape.get(&self.tape.idx) {
@@ -312,7 +324,7 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 						},
 						12 => self.tape.op12(),
 						13 => self.tape.op13(),
-						14 => self.tape.op14(),
+						14 => self.tape.op14(modcache),
 						_ => (),
 					}
 				},
