@@ -1,8 +1,9 @@
+use std::cmp::{self, Ordering, Ord};
 use std::i64;
 use std::fmt::{self, Display};
 use std::rc::Rc;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum Value {
 	S(Rc<String>),
 	I(i64),
@@ -14,21 +15,6 @@ impl Display for Value {
 			Value::S(ref x) => write!(f, "{}", x),
 			Value::I(x) => write!(f, "{}", x),
 		}
-	}
-}
-
-fn num_decr(s: &mut Vec<u8>) {
-	if let Some(&b'-') = s.first() {
-		num_incr_core(s, 1)
-	} else {
-		num_decr_core(s, 0)
-	}
-}
-fn num_incr(s: &mut Vec<u8>) {
-	if let Some(&b'-') = s.first() {
-		num_decr_core(s, 1)
-	} else {
-		num_incr_core(s, 0)
 	}
 }
 
@@ -58,7 +44,62 @@ fn num_incr_core(s: &mut Vec<u8>, start: usize) {
 	s.insert(start, b'1');
 }
 
-fn is_num(s: &str) -> bool {
+fn num_incr_by_core(x: &[u8], y: &[u8], n: bool) -> Value {
+	let (xlen, ylen) = (x.len(), y.len());
+	let xylen = cmp::max(xlen, ylen);
+	let mut z = Vec::with_capacity(xylen + 2);
+	let mut carry = 0;
+	for i in 0..xylen {
+		let xc = if i >= xlen - 1 { 0 } else { x[xlen - i - 1] - b'0' };
+		let yc = if i >= ylen - 1 { 0 } else { x[ylen - i - 1] - b'0' };
+		let n = xc + yc + carry;
+		z.push(if n > 10 {
+			carry = 1;
+			n - (b'0' + 10)
+		} else { n - b'0' });
+	}
+	if carry == 1 {
+		z.push(b'1');
+	}
+	if n {
+		z.push(b'-');
+	}
+	z.reverse();
+	Value::from(unsafe { String::from_utf8_unchecked(z) })
+}
+
+fn num_decr_by_core(x: &[u8], y: &[u8], n: bool) -> Value {
+	let (xlen, ylen) = (x.len(), y.len());
+	let xylen = cmp::max(xlen, ylen);
+	let mut z = Vec::with_capacity(xylen);
+	let mut carry = 0;
+	for i in 0..xylen {
+		let xc = if i >= xlen - 1 { 0 } else { x[xlen - i - 1] - b'0' };
+		let yc = if i >= ylen - 1 { 0 } else { x[ylen - i - 1] - b'0' } + carry;
+		if yc > xc {
+			z.push((b'0' + 10) - (yc - xc));
+			carry = 1;
+		} else {
+			z.push(b'0' + xc - yc);
+			carry = 0;
+		}
+	}
+	if n {
+		z.push(b'-');
+	}
+	z.reverse();
+	Value::from(unsafe { String::from_utf8_unchecked(z) })
+}
+
+fn unum_cmp(a: &[u8], b: &[u8]) -> Ordering {
+	let alen = a.len();
+	let blen = b.len();
+	if alen > blen { Ordering::Greater }
+	else if blen > alen { Ordering::Less }
+	else { a.cmp(b) }
+}
+
+pub fn is_num(s: &str) -> bool {
 	s == "0" || {
 		let mut chs = s.bytes();
 		match chs.next() {
@@ -72,11 +113,44 @@ fn is_num(s: &str) -> bool {
 	}
 }
 
-fn num_parse(s: &str) -> Option<i64> {
-	if is_num(s) {
-		s.parse::<i64>().ok()
-	} else {
+fn i64_parse(s: &str) -> Option<i64> {
+	if s == "0" {
+		return Some(0)
+	}
+	let mut chs = s.bytes();
+	let mut first = chs.next();
+	let neg = first == Some(b'-');
+	if neg {
+		first = chs.next();
+	}
+	let mut val = match first {
+		Some(x @ b'1'...b'9') => (x - b'0') as u64,
+		_ => return None,
+	};
+	for c in chs {
+		match c {
+			x @ b'0'...b'9' => {
+				if let Some(v10) = val.checked_mul(10).and_then(move|v10| v10.checked_add((x - b'0') as u64)) {
+					val = v10;
+				} else {
+					return None;
+				}
+			},
+			_ => return None,
+		}
+	}
+	if neg {
+		if val > i64::MAX as u64 + 1 {
+			None
+		} else if val == i64::MAX as u64 + 1 {
+			Some(i64::MIN)
+		} else {
+			Some(-(val as i64))
+		}
+	} else if val > i64::MAX as u64 {
 		None
+	} else {
+		Some(val as i64)
 	}
 }
 
@@ -90,8 +164,15 @@ impl Value {
 				Value::S(ref mut x) => {
 					if is_num(&x[..]) {
 						let s = Rc::make_mut(x);
-						unsafe { num_incr(s.as_mut_vec()); }
-						if let Some(x) = num_parse(s) {
+						unsafe {
+							let s = s.as_mut_vec();
+							if s[0] == b'-' {
+								num_decr_core(s, 1)
+							} else {
+								num_incr_core(s, 0)
+							}
+						}
+						if let Some(x) = i64_parse(s) {
 							newx = x;
 							break
 						}
@@ -115,8 +196,15 @@ impl Value {
 				Value::S(ref mut x) => {
 					if is_num(&x[..]) {
 						let s = Rc::make_mut(x);
-						unsafe { num_decr(s.as_mut_vec()); }
-						if let Some(x) = num_parse(s) {
+						unsafe {
+							let s = s.as_mut_vec();
+							if s[0] == b'-' {
+								num_incr_core(s, 1)
+							} else {
+								num_decr_core(s, 0)
+							}
+						}
+						if let Some(x) = i64_parse(s) {
 							newx = x;
 							break
 						}
@@ -130,17 +218,127 @@ impl Value {
 		}
 		*self = Value::I(newx);
 	}
+
+	pub fn gtz(&self) -> bool {
+		match *self {
+			Value::I(x) => x > 0,
+			Value::S(ref s) => {
+				let mut chs = s.bytes();
+				match chs.next() {
+					Some(b'1'...b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
+					_ => false,
+				}
+			},
+		}
+	}
+
+	pub fn incr_by(&self, rhs: &Value) -> Value {
+		match (self, rhs) {
+			(&Value::I(x), &Value::I(y)) => {
+				if let Some(z) = x.checked_add(y) {
+					return Value::I(z)
+				}
+			}
+			(_, &Value::S(ref s)) if !is_num(s) => return self.clone(),
+			(_, &Value::I(0)) => return self.clone(),
+			(&Value::S(ref s), _) if !is_num(s) => return rhs.clone(),
+			(&Value::I(0), _) => return rhs.clone(),
+			_ => (),
+		}
+		let (xs, ys) = (self.to_string(), rhs.to_string());
+		let (x, y) = (xs.as_bytes(), ys.as_bytes());
+		let (xn, yn) = (x[0] == b'-', y[0] == b'-');
+		if xn == yn {
+			if xn {
+				num_incr_by_core(&x[1..], &y[1..], true)
+			} else {
+				num_incr_by_core(x, y, false)
+			}
+		} else {
+			if xn {
+				match unum_cmp(&x[1..], y) {
+					Ordering::Equal => Value::I(0),
+					Ordering::Less => num_decr_by_core(y, &x[1..], false),
+					Ordering::Greater => num_decr_by_core(&x[1..], y, true),
+				}
+			} else {
+				match unum_cmp(x, &y[1..]) {
+					Ordering::Equal => Value::I(0),
+					Ordering::Less => num_decr_by_core(&y[1..], x, true),
+					Ordering::Greater => num_decr_by_core(x, &y[1..], false),
+				}
+			}
+		}
+	}
+
+	pub fn decr_by(&self, rhs: &Value) -> Value {
+		match (self, rhs) {
+			(&Value::I(x), &Value::I(y)) => {
+				if let Some(z) = x.checked_sub(y) {
+					return Value::I(z)
+				}
+			}
+			(_, &Value::S(ref s)) if !is_num(s) => return self.clone(),
+			(_, &Value::I(0)) => return self.clone(),
+			(&Value::S(ref s), _) if !is_num(s) => return rhs.as_negative_unchecked(),
+			(&Value::I(0), _) => return rhs.as_negative_unchecked(),
+			_ => (),
+		}
+		let (xs, ys) = (self.to_string(), rhs.to_string());
+		let (x, y) = (xs.as_bytes(), ys.as_bytes());
+		let (xn, yn) = (x[0] == b'-', y[0] == b'-');
+		if xn != yn {
+			if xn {
+				num_incr_by_core(&x[1..], y, true)
+			} else {
+				num_incr_by_core(x, &y[1..], false)
+			}
+		} else {
+			if xn {
+				match unum_cmp(&x[1..], y) {
+					Ordering::Equal => Value::I(0),
+					Ordering::Less => num_decr_by_core(y, &x[1..], false),
+					Ordering::Greater => num_decr_by_core(&x[1..], y, true),
+				}
+			} else {
+				match unum_cmp(x, &y[1..]) {
+					Ordering::Equal => Value::I(0),
+					Ordering::Less => num_decr_by_core(&y[1..], x, true),
+					Ordering::Greater => num_decr_by_core(x, &y[1..], false),
+				}
+			}
+		}
+	}
+
+	pub fn as_negative_unchecked(&self) -> Value {
+		match *self {
+			Value::I(i64::MIN) => Value::S(Rc::new(String::from("9223372036854775808"))),
+			Value::I(x) => Value::I(-x),
+			Value::S(ref s) => {
+				if s.as_bytes()[0] == b'-' {
+					Value::S(Rc::new(String::from(&s[1..])))
+				} else if &s[..] == "9223372036854775808" {
+					Value::I(i64::MIN)
+				} else {
+					let mut news = String::with_capacity(s.len() + 1);
+					news.push('-');
+					news.push_str(&s[..]);
+					Value::S(Rc::new(news))
+				}
+			}
+		}
+	}
 }
 
 impl<'a> From<&'a str> for Value {
 	fn from(s: &'a str) -> Value {
-		if let Some(x) = num_parse(&s) { Value::I(x) } else { Value::S(Rc::new(String::from(s))) }
+		if let Some(x) = i64_parse(&s) { Value::I(x) } else { Value::S(Rc::new(String::from(s))) }
 	}
 }
 
 impl From<String> for Value {
 	fn from(s: String) -> Value {
-		if let Some(x) = num_parse(&s) { Value::I(x) } else { Value::S(Rc::new(s)) }
+		if let Some(x) = i64_parse(&s) { Value::I(x) } else { Value::S(Rc::new(s)) }
 	}
 }
 
