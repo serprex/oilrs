@@ -1,12 +1,74 @@
 use std::cmp::{self, Ordering, Ord};
 use std::i64;
 use std::fmt::{self, Display};
+use std::mem;
 use std::rc::Rc;
+use std::str::Chars;
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub enum Value {
 	S(Rc<String>),
 	I(i64),
+	C(char),
+}
+
+pub enum ValueAsChars<'a> {
+	S(Chars<'a>),
+	I([u8; 21]),
+	C(char),
+	None,
+}
+
+impl<'a> ValueAsChars<'a> {
+	pub fn new(val: &'a Value) -> (ValueAsChars, usize) {
+		match *val {
+			Value::I(i64::MIN) => (ValueAsChars::I(
+				[20, b'8',b'0',b'8',b'5',b'7',b'7',b'4',b'7',b'8',b'6',
+				b'3',b'0',b'2',b'7',b'3',b'3',b'2',b'2',b'9',b'-']), 20),
+			Value::I(0) => (ValueAsChars::C('0'), 1),
+			Value::I(mut x) => {
+				let mut buf: [u8; 21] = unsafe { mem::uninitialized() };
+				let neg = x < 0;
+				if neg { x = -x };
+				let mut xlen = 1;
+				while {
+					buf[xlen] = b'0' + (x % 10) as u8;
+					x /= 10;
+					x != 0
+				} { xlen += 1 }
+				if neg {
+					xlen += 1;
+					buf[xlen] = b'-';
+				}
+				buf[0] = xlen as u8;
+				(ValueAsChars::I(buf), xlen)
+			},
+			Value::S(ref s) => (ValueAsChars::S(s.chars()), s.chars().count()),
+			Value::C(c) => (ValueAsChars::C(c), 1),
+		}
+	}
+}
+
+impl<'a> Iterator for ValueAsChars<'a> {
+	type Item = char;
+	fn next(&mut self) -> Option<char> {
+		match *self {
+			ValueAsChars::S(ref mut chs) => chs.next(),
+			ValueAsChars::I(ref mut xs) => {
+				if xs[0] == 0 { None }
+				else {
+					let x = unsafe { *xs.get_unchecked(xs[0] as usize) };
+					xs[0] -= 1;
+					Some(x as char)
+				}
+			},
+			ValueAsChars::C(c) => {
+				*self = ValueAsChars::None;
+				Some(c)
+			},
+			ValueAsChars::None => None,
+		}
+	}
 }
 
 impl Display for Value {
@@ -14,6 +76,7 @@ impl Display for Value {
 		match *self {
 			Value::S(ref x) => write!(f, "{}", x),
 			Value::I(x) => write!(f, "{}", x),
+			Value::C(x) => write!(f, "{}", x),
 		}
 	}
 }
@@ -181,6 +244,7 @@ impl Value {
 						break
 					}
 				},
+				Value::C(_) => *self = Value::I(1),
 			}
 			return
 		}
@@ -213,6 +277,7 @@ impl Value {
 						break
 					}
 				},
+				Value::C(_) => *self = Value::I(-1),
 			}
 			return
 		}
@@ -229,6 +294,7 @@ impl Value {
 					_ => false,
 				}
 			},
+			Value::C(_) => false,
 		}
 	}
 
@@ -240,9 +306,9 @@ impl Value {
 				}
 			}
 			(_, &Value::S(ref s)) if !is_num(s) => return self.clone(),
-			(_, &Value::I(0)) => return self.clone(),
+			(_, &Value::I(0)) | (_, &Value::C(_)) => return self.clone(),
 			(&Value::S(ref s), _) if !is_num(s) => return rhs.clone(),
-			(&Value::I(0), _) => return rhs.clone(),
+			(&Value::I(0), _) | (&Value::C(_), _) => return rhs.clone(),
 			_ => (),
 		}
 		let (xs, ys) = (self.to_string(), rhs.to_string());
@@ -279,9 +345,9 @@ impl Value {
 				}
 			}
 			(_, &Value::S(ref s)) if !is_num(s) => return self.clone(),
-			(_, &Value::I(0)) => return self.clone(),
+			(_, &Value::I(0)) | (_, &Value::C(_)) => return self.clone(),
 			(&Value::S(ref s), _) if !is_num(s) => return rhs.as_negative_unchecked(),
-			(&Value::I(0), _) => return rhs.as_negative_unchecked(),
+			(&Value::I(0), _) | (&Value::C(_), _) => return rhs.as_negative_unchecked(),
 			_ => (),
 		}
 		let (xs, ys) = (self.to_string(), rhs.to_string());
@@ -326,19 +392,28 @@ impl Value {
 					Value::S(Rc::new(news))
 				}
 			}
+			Value::C(_) => Value::I(0),
 		}
 	}
 }
 
 impl<'a> From<&'a str> for Value {
 	fn from(s: &'a str) -> Value {
-		if let Some(x) = i64_parse(&s) { Value::I(x) } else { Value::S(Rc::new(String::from(s))) }
+		if let Some(x) = i64_parse(&s) { Value::I(x) }
+		else {
+			if !s.is_empty() && s.chars().nth(1).is_none() { Value::C(s.chars().nth(0).unwrap()) }
+			else { Value::S(Rc::new(String::from(s))) }
+		}
 	}
 }
 
 impl From<String> for Value {
 	fn from(s: String) -> Value {
-		if let Some(x) = i64_parse(&s) { Value::I(x) } else { Value::S(Rc::new(s)) }
+		if let Some(x) = i64_parse(&s) { Value::I(x) }
+		else {
+			if !s.is_empty() && s.chars().nth(1).is_none() { Value::C(s.chars().nth(0).unwrap()) }
+			else { Value::S(Rc::new(s)) }
+		}
 	}
 }
 
@@ -346,7 +421,7 @@ impl From<char> for Value {
 	fn from(c: char) -> Value {
 		match c {
 			'0'...'9' => Value::I((c as u32 - '0' as u32) as i64),
-			_ => Value::S(Rc::new(c.to_string())),
+			_ => Value::C(c),
 		}
 	}
 }

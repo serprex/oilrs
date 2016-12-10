@@ -5,10 +5,9 @@ use std::fmt::Write;
 use std::i64;
 use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use fnv::FnvHashMap;
 use rand::{thread_rng, Rng};
-use super::value::{is_num, Value};
+use super::value::{is_num, Value, ValueAsChars};
 
 pub struct Tape<'a> {
 	pub idx: Value,
@@ -45,12 +44,6 @@ impl<'a> Tape<'a> {
 			x.clone()
 		} else {
 			Value::I(0)
-		}
-	}
-	pub fn read_string(&self, i: &Value) -> Rc<String> {
-		match self.read_val(i) {
-			Value::S(ref x) => x.clone(),
-			Value::I(x) => Rc::new(x.to_string()),
 		}
 	}
 	pub fn read_int(&self) -> Value {
@@ -109,11 +102,12 @@ impl<'a> Tape<'a> {
 	pub fn op12(&mut self) {
 		self.step();
 		let a = self.read_int();
-		let a = self.read_string(&a);
+		let a = self.read_val(&a);
+		let (aiter, alen) = ValueAsChars::new(&a);
 		self.step();
 		let mut b = self.read_int();
-		self.tape.insert(b.clone(), Value::I(a.len() as i64));
-		for ch in a.chars() {
+		self.tape.insert(b.clone(), Value::I(alen as i64));
+		for ch in aiter {
 			b.incr();
 			self.tape.insert(b.clone(), Value::from(ch));
 		}
@@ -138,12 +132,15 @@ impl<'a> Tape<'a> {
 	}
 	pub fn op14(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
 		self.step();
-		let a = self.read_string(&self.idx);
+		let path = match self.read_val(&self.idx) {
+			Value::S(ref x) => self.root.join(&x.clone()[..]),
+			Value::I(x) => self.root.join(&x.to_string()),
+			Value::C(x) => self.root.join(&x.to_string()), // Todo #27784
+		};
 		self.step();
 		let oi = self.read_int();
 		self.step();
 		let ii = self.read_int();
-		let path = self.root.join(&a[..]);
 		let cachetape;
 		{
 			let mut child = TapeChild {
@@ -178,18 +175,20 @@ impl<'a> Tape<'a> {
 		let val = self.read_val(&a);
 		self.tape.insert(a, match val {
 			Value::I(i64::MAX) => Value::I(thread_rng().gen()),
-			Value::I(x) if x > 0 => Value::I(thread_rng().gen_range(0, x+1)),
-			_ => return,
+			Value::I(x) => if x > 0 { Value::I(thread_rng().gen_range(0, x+1)) }
+				else { return },
+			_ => Value::I(0),
 		});
 	}
 	pub fn op16(&mut self) {
 		self.step();
 		let a = self.read_int();
-		let a = self.read_string(&a);
+		let a = self.read_val(&a);
+		let (aiter, alen) = ValueAsChars::new(&a);
 		self.step();
 		let mut b = self.read_int();
-		self.tape.insert(b.clone(), Value::I(a.len() as i64));
-		for ch in a.chars() {
+		self.tape.insert(b.clone(), Value::I(alen as i64));
+		for ch in aiter {
 			b.incr();
 			self.tape.insert(b.clone(), Value::I(ch as u32 as i64));
 		}
