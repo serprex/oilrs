@@ -1,7 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::fs;
 use std::fmt::Write;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use fnv::FnvHashMap;
@@ -11,7 +11,7 @@ pub struct Tape<'a> {
 	pub idx: Value,
 	pub tape: FnvHashMap<Value, Value>,
 	pub dir: bool,
-	pub root: Option<&'a Path>,
+	pub root: &'a Path,
 }
 
 struct TapeChild<'a, 'b: 'a> {
@@ -22,12 +22,12 @@ struct TapeChild<'a, 'b: 'a> {
 }
 
 impl<'a> Tape<'a> {
-	pub fn new() -> Tape<'a> {
+	pub fn new(root: &'a Path) -> Tape<'a> {
 		Tape {
 			idx: Value::I(0),
 			dir: true,
 			tape: FnvHashMap::default(),
-			root: None,
+			root: root,
 		}
 	}
 	pub fn step(&mut self) {
@@ -130,28 +130,6 @@ impl<'a> Tape<'a> {
 		}
 		self.tape.insert(c, Value::from(s));
 	}
-	fn run_path(&mut self, oi: Value, ii: Value, path: &Path, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
-		let mut child = TapeChild {
-			tape: Tape::new(),
-			parent: self,
-			oidx: oi,
-			iidx: ii,
-		};
-		child.tape.root = path.parent();
-		if let Some(m) = modcache.get_mut(path).map(|m| m.clone()) {
-			child.tape.tape = m;
-		}
-		else if let Ok(f) = fs::File::open(&path) {
-			let f = BufReader::new(f);
-			for (idx, line) in f.lines().enumerate() {
-				if let Ok(line) = line {
-					child.tape.tape.insert(Value::I(idx as i64), Value::from(line));
-				}
-			}
-			modcache.insert(path.to_path_buf(), child.tape.tape.clone());
-		}
-		child.run(modcache);
-	}
 	pub fn op14(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
 		self.step();
 		let a = self.read_string(&self.idx);
@@ -159,11 +137,34 @@ impl<'a> Tape<'a> {
 		let oi = self.read_int();
 		self.step();
 		let ii = self.read_int();
-		if let Some(pref) = self.root {
-			self.run_path(oi, ii, pref.join(&a[..]).as_path(), modcache);
-		} else {
-			self.run_path(oi, ii, Path::new(&a[..]), modcache);
+		let path = self.root.join(&a[..]);
+		let cachetape;
+		{
+			let mut child = TapeChild {
+				tape: Tape::new(path.parent().unwrap_or_else(|| Path::new(""))),
+				parent: self,
+				oidx: oi,
+				iidx: ii,
+			};
+			if let Some(m) = modcache.get_mut(&path).map(|m| m.clone()) {
+				child.tape.tape = m;
+				child.run(modcache);
+				return
+			}
+			else if let Ok(f) = fs::File::open(&path) {
+				let f = BufReader::new(f);
+				for (idx, line) in f.lines().enumerate() {
+					if let Ok(line) = line {
+						child.tape.tape.insert(Value::I(idx as i64), Value::from(line));
+					}
+				}
+				cachetape = child.tape.tape.clone();
+				child.run(modcache);
+			} else {
+				return
+			}
 		}
+		modcache.insert(path, cachetape);
 	}
 	pub fn run(&mut self)
 	{

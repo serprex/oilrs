@@ -3,15 +3,15 @@ mod tape;
 mod value;
 use std::env;
 use std::fs;
-use std::io::{self, BufRead, BufReader};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use tape::Tape;
 use value::Value;
 
 fn main() {
 	if let Some(a) = env::args().nth(1) {
-		let mut tape = Tape::new();
 		let path = Path::new(&a);
+		let mut tape = Tape::new(path.parent().unwrap_or_else(|| Path::new("")));
 		if let Ok(f) = fs::File::open(&path) {
 			let f = BufReader::new(f);
 			for (idx, line) in f.lines().enumerate() {
@@ -20,7 +20,6 @@ fn main() {
 				}
 			}
 		}
-		tape.root = path.parent();
 		tape.run();
 	} else {
 		println!("oilrs [filename]");
