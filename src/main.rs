@@ -18,14 +18,14 @@ fn main() {
 				let mut lines = Vec::new();
 				let mut labels = FnvHashMap::default();
 				let mut labelfill = Vec::new();
-				let mut lineno = 0;
 				for line in f.lines() {
 					if let Ok(line) = line {
+						let lineno = lines.len();
 						lines.push(if let Some(op) = match &line[..] {
 							"nop" => Some("0"),
 							"copy" | "mov" => Some("1"),
 							"reverse" => Some("2"),
-							"quit" => Some("3"),
+							"quit" | "exit" | "return" => Some("3"),
 							"output" | "write" => Some("4"),
 							"user_input" | "read" => Some("5"),
 							"jump" | "jmp" => Some("6"),
@@ -55,37 +55,37 @@ fn main() {
 						} else {
 							Cow::Owned(line)
 						});
-						lineno += 1;
 					}
 				}
 				if let Ok(mut output) = fs::File::create(&b) {
 					let mut labelidx = 0;
 					for (idx, line) in lines.into_iter().enumerate() {
-						if labelidx < labelfill.len() {
-							if labelfill[labelidx] == idx {
-								labelidx += 1;
-								if let Some(lineno) = labels.get(&line[1..]) {
-									writeln!(output, "{}", lineno).ok();
-									continue
-								}
+						if labelidx < labelfill.len() && labelfill[labelidx] == idx {
+							labelidx += 1;
+							if let Some(lineno) = labels.get(&line[1..]) {
+								writeln!(output, "{}", lineno).ok();
+								continue
+							} else {
+								println!("Unknown label: {}", &line[1..]);
 							}
 						}
 						writeln!(output, "{}", line).ok();
 					}
 				}
 			}
-		}
-		let path = Path::new(&a);
-		let mut tape = Tape::new(path.parent().unwrap_or_else(|| Path::new("")));
-		if let Ok(f) = fs::File::open(&path) {
-			let f = BufReader::new(f);
-			for (idx, line) in f.lines().enumerate() {
-				if let Ok(line) = line {
-					tape.tape.insert(Value::I(idx as i64), Value::from(line));
+		} else {
+			let path = Path::new(&a);
+			let mut tape = Tape::new(path.parent().unwrap_or_else(|| Path::new("")));
+			if let Ok(f) = fs::File::open(&path) {
+				let f = BufReader::new(f);
+				for (idx, line) in f.lines().enumerate() {
+					if let Ok(line) = line {
+						tape.tape.insert(Value::I(idx as i64), Value::from(line));
+					}
 				}
 			}
+			tape.run();
 		}
-		tape.run();
 	} else {
 		println!("oilrs [filename]");
 	}
