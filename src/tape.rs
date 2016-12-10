@@ -1,10 +1,13 @@
 use std::collections::hash_map::Entry;
+use std::char;
 use std::fs;
 use std::fmt::Write;
+use std::i64;
 use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use fnv::FnvHashMap;
+use rand::{thread_rng, Rng};
 use super::value::{is_num, Value};
 
 pub struct Tape<'a> {
@@ -119,16 +122,19 @@ impl<'a> Tape<'a> {
 		self.step();
 		let mut a = self.read_int();
 		self.step();
-		let mut b = self.read_int();
-		self.step();
-		let c = self.read_int();
-		let mut s = String::new();
-		while b.gtz() {
-			write!(s, "{}", self.read_val(&a)).ok();
-			a.incr();
-			b.decr();
+		match self.read_int() {
+			Value::I(b) => {
+				self.step();
+				let c = self.read_int();
+				let mut s = String::new();
+				for _ in 0..b {
+					write!(s, "{}", self.read_val(&a)).ok();
+					a.incr();
+				}
+				self.tape.insert(c, Value::from(s));
+			}
+			_ => self.step(),
 		}
-		self.tape.insert(c, Value::from(s));
 	}
 	pub fn op14(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
 		self.step();
@@ -165,6 +171,49 @@ impl<'a> Tape<'a> {
 			}
 		}
 		modcache.insert(path, cachetape);
+	}
+	pub fn op15(&mut self) {
+		self.step();
+		let a = self.read_int();
+		let val = self.read_val(&a);
+		self.tape.insert(a, match val {
+			Value::I(i64::MAX) => Value::I(thread_rng().gen()),
+			Value::I(x) if x > 0 => Value::I(thread_rng().gen_range(0, x+1)),
+			_ => return,
+		});
+	}
+	pub fn op16(&mut self) {
+		self.step();
+		let a = self.read_int();
+		let a = self.read_string(&a);
+		self.step();
+		let mut b = self.read_int();
+		self.tape.insert(b.clone(), Value::I(a.len() as i64));
+		for ch in a.chars() {
+			b.incr();
+			self.tape.insert(b.clone(), Value::I(ch as u32 as i64));
+		}
+	}
+	pub fn op17(&mut self) {
+		self.step();
+		let mut a = self.read_int();
+		self.step();
+		match self.read_int() {
+			Value::I(b) => {
+				self.step();
+				let c = self.read_int();
+				let mut s = String::with_capacity(b as usize);
+				for _ in 0..b {
+					s.push(match self.read_val(&a) {
+						Value::I(x) if x >= 0 && x <= 0x10ffff => char::from_u32(x as u32).unwrap_or('\u{fffd}'),
+						_ => '\u{fffd}'
+					});
+					a.incr();
+				}
+				self.tape.insert(c, Value::from(s));
+			}
+			_ => self.step(),
+		}
 	}
 	pub fn run(&mut self)
 	{
@@ -214,6 +263,9 @@ impl<'a> Tape<'a> {
 						12 => self.op12(),
 						13 => self.op13(),
 						14 => self.op14(&mut modcache),
+						15 => self.op15(),
+						16 => self.op16(),
+						17 => self.op17(),
 						_ => (),
 					}
 				},
@@ -288,6 +340,9 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 						12 => self.tape.op12(),
 						13 => self.tape.op13(),
 						14 => self.tape.op14(modcache),
+						15 => self.tape.op15(),
+						16 => self.tape.op16(),
+						17 => self.tape.op17(),
 						_ => (),
 					}
 				},

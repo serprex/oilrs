@@ -1,4 +1,5 @@
 extern crate fnv;
+extern crate rand;
 mod tape;
 mod value;
 use std::borrow::Cow;
@@ -37,6 +38,9 @@ fn main() {
 							"explode" => Some("12"),
 							"implode" => Some("13"),
 							"call" => Some("14"),
+							"rand" => Some("15"),
+							"ord" => Some("16"),
+							"chr" => Some("17"),
 							_ => None,
 						} {
 							Cow::Borrowed(op)
