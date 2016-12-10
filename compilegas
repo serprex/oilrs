@@ -1,0 +1,6 @@
+#!/bin/sh
+mkdir -p std
+for f in gas/*
+do nf=${f%.gas}.oil
+cargo run -- "$f" "std${nf#gas}"
+done
