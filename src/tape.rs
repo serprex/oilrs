@@ -186,19 +186,13 @@ impl<'a> Tape<'a> {
 						let range9 = Range::new(b'0', b'9' + 1);
 						let s = Rc::make_mut(x);
 						let b = unsafe { s.as_mut_vec() };
-						if b.iter().all(|&c| c == b'9') {
+						let mut oldb = b.clone();
+						while {
 							for c in b.iter_mut() {
 								*c = range9.ind_sample(&mut rng);
 							}
-						} else {
-							let mut oldb = b.clone();
-							while {
-								for c in b.iter_mut() {
-									*c = range9.ind_sample(&mut rng);
-								}
-								b.cmp(&&mut oldb) == Ordering::Greater
-							} { }
-						}
+							b.cmp(&&mut oldb) == Ordering::Greater
+						} { }
 						while b[0] == b'0' {
 							b.swap_remove(0);
 						}
