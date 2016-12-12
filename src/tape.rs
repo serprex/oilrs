@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::path::{Path, PathBuf};
 use fnv::FnvHashMap;
 use rand::{thread_rng, Rng};
+use rand::distributions::{IndependentSample, Range};
 use super::value::{is_num, num_gtz, Value, ValueAsChars};
 
 pub struct Tape<'a> {
@@ -182,18 +183,18 @@ impl<'a> Tape<'a> {
 					Value::I(ref mut x @ i64::MAX) => *x = rng.gen_range(0, i64::MAX as u64 + 1) as i64,
 					Value::I(ref mut x) => if *x > 0 { *x = rng.gen_range(0, *x+1) },
 					Value::S(ref mut x) if num_gtz(x) => {
+						let range9 = Range::new(b'0', b'9' + 1);
 						let s = Rc::make_mut(x);
 						let b = unsafe { s.as_mut_vec() };
-						if b[0] == b'1' && b.iter().skip(1).all(|&c| c == b'0') {
-							for c in b.iter_mut().skip(1) {
-								*c = rng.gen_range(b'0', b'9' + 1);
+						if b.iter().all(|&c| c == b'9') {
+							for c in b.iter_mut() {
+								*c = range9.ind_sample(&mut rng);
 							}
-							b.swap_remove(0);
 						} else {
 							let mut oldb = b.clone();
 							while {
 								for c in b.iter_mut() {
-									*c = rng.gen_range(b'0', b'9' + 1);
+									*c = range9.ind_sample(&mut rng);
 								}
 								b.cmp(&&mut oldb) == Ordering::Greater
 							} { }
