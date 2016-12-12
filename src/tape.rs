@@ -179,7 +179,7 @@ impl<'a> Tape<'a> {
 				let val = ent.get_mut();
 				let mut rng = thread_rng();
 				match *val {
-					Value::I(ref mut x @ i64::MAX) => *x = rng.gen(),
+					Value::I(ref mut x @ i64::MAX) => *x = rng.gen_range(0, i64::MAX as u64 + 1) as i64,
 					Value::I(ref mut x) => if *x > 0 { *x = rng.gen_range(0, *x+1) },
 					Value::S(ref mut x) if num_gtz(x) => {
 						let s = Rc::make_mut(x);
