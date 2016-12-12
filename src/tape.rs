@@ -1,13 +1,15 @@
 use std::collections::hash_map::Entry;
+use std::cmp::{Ordering, Ord};
 use std::char;
 use std::fs;
 use std::fmt::Write;
 use std::i64;
 use std::io::{self, BufRead, BufReader};
+use std::rc::Rc;
 use std::path::{Path, PathBuf};
 use fnv::FnvHashMap;
 use rand::{thread_rng, Rng};
-use super::value::{is_num, Value, ValueAsChars};
+use super::value::{is_num, num_gtz, Value, ValueAsChars};
 
 pub struct Tape<'a> {
 	pub idx: Value,
@@ -172,13 +174,40 @@ impl<'a> Tape<'a> {
 	pub fn op15(&mut self) {
 		self.step();
 		let a = self.read_int();
-		let val = self.read_val(&a);
-		self.tape.insert(a, match val {
-			Value::I(i64::MAX) => Value::I(thread_rng().gen()),
-			Value::I(x) => if x > 0 { Value::I(thread_rng().gen_range(0, x+1)) }
-				else { return },
-			_ => Value::I(0),
-		});
+		match self.tape.entry(a) {
+			Entry::Occupied(mut ent) => {
+				let val = ent.get_mut();
+				let mut rng = thread_rng();
+				match *val {
+					Value::I(ref mut x @ i64::MAX) => *x = rng.gen(),
+					Value::I(ref mut x) => if *x > 0 { *x = rng.gen_range(0, *x+1) },
+					Value::S(ref mut x) if num_gtz(x) => {
+						let s = Rc::make_mut(x);
+						let b = unsafe { s.as_mut_vec() };
+						if b[0] == b'1' && b.iter().skip(1).all(|&c| c == b'0') {
+							for c in b.iter_mut().skip(1) {
+								*c = rng.gen_range(b'0', b'9' + 1);
+							}
+							b.swap_remove(0);
+						} else {
+							let mut oldb = b.clone();
+							while {
+								for c in b.iter_mut() {
+									*c = rng.gen_range(b'0', b'9' + 1);
+								}
+								b.cmp(&&mut oldb) == Ordering::Greater
+							} { }
+						}
+						while b[0] == b'0' {
+							b.swap_remove(0);
+						}
+					},
+					Value::S(ref x) if is_num(x) => (),
+					_ => *val = Value::I(0),
+				}
+			},
+			Entry::Vacant(_) => (),
+		}
 	}
 	pub fn op16(&mut self) {
 		self.step();

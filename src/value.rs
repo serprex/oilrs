@@ -162,6 +162,14 @@ fn unum_cmp(a: &[u8], b: &[u8]) -> Ordering {
 	else { a.cmp(b) }
 }
 
+pub fn num_gtz(s: &str) -> bool {
+	let mut chs = s.bytes();
+	match chs.next() {
+		Some(b'1'...b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
+		_ => false,
+	}
+}
+
 pub fn is_num(s: &str) -> bool {
 	s == "0" || {
 		let mut chs = s.bytes();
@@ -223,7 +231,7 @@ impl Value {
 		loop {
 			match *self {
 				Value::I(i64::MAX) => *self = Value::S(Rc::new(String::from("9223372036854775808"))),
-				Value::I(x) => *self = Value::I(x+1),
+				Value::I(ref mut x) => *x += 1,
 				Value::S(ref mut x) => {
 					if is_num(&x[..]) {
 						let s = Rc::make_mut(x);
@@ -256,7 +264,7 @@ impl Value {
 		loop {
 			match *self {
 				Value::I(i64::MIN) => *self = Value::S(Rc::new(String::from("-9223372036854775809"))),
-				Value::I(x) => *self = Value::I(x-1),
+				Value::I(ref mut x) => *x -= 1,
 				Value::S(ref mut x) => {
 					if is_num(&x[..]) {
 						let s = Rc::make_mut(x);
@@ -282,20 +290,6 @@ impl Value {
 			return
 		}
 		*self = Value::I(newx);
-	}
-
-	pub fn gtz(&self) -> bool {
-		match *self {
-			Value::I(x) => x > 0,
-			Value::S(ref s) => {
-				let mut chs = s.bytes();
-				match chs.next() {
-					Some(b'1'...b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
-					_ => false,
-				}
-			},
-			Value::C(_) => false,
-		}
 	}
 
 	pub fn incr_by(&self, rhs: &Value) -> Value {
