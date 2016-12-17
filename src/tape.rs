@@ -158,11 +158,14 @@ impl<'a> Tape<'a> {
 				return
 			}
 			else if let Ok(f) = fs::File::open(&path) {
-				let f = BufReader::new(f);
-				for (idx, line) in f.lines().enumerate() {
-					if let Ok(line) = line {
-						child.tape.tape.insert(Value::I(idx as i64), Value::from(line));
-					}
+				let mut f = BufReader::new(f);
+				let mut line = String::new();
+				let mut idx = 0;
+				while let Ok(n) = f.read_line(&mut line) {
+					if n == 0 { break }
+					child.tape.tape.insert(Value::I(idx), Value::from(line.trim_right_matches('\n')));
+					line.clear();
+					idx += 1;
 				}
 				cachetape = child.tape.tape.clone();
 				child.run(modcache);
