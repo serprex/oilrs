@@ -136,9 +136,9 @@ impl<'a> Tape<'a> {
 	pub fn op14(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
 		self.step();
 		let path = match self.read_val(&self.idx) {
-			Value::S(ref x) => self.root.join(&x.clone()[..]),
+			Value::S(ref x) => self.root.join(&x[..]),
 			Value::I(x) => self.root.join(&x.to_string()),
-			Value::C(x) => self.root.join(&x.to_string()), // Todo #27784
+			Value::C(x) => self.root.join(x.encode_utf8(&mut [0u8; 4])),
 		};
 		self.step();
 		let oi = self.read_int();
