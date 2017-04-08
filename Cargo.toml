@@ -1,6 +1,6 @@
 [package]
 name = "oil-lang"
-version = "2.2.1"
+version = "2.3.0"
 authors = ["serprex"]
 license = "MIT"
 repository = "https://github.com/serprex/oilrs"
@@ -8,7 +8,7 @@ description = "Implementation of OIL"
 
 [dependencies]
 fnv = "1.0.5"
-rand = "0.3.15"
+rand = "0.3"
 
 [profile.release]
 panic = "abort"

@@ -2,6 +2,7 @@ extern crate fnv;
 extern crate rand;
 mod tape;
 mod value;
+mod stdlib;
 use std::borrow::Cow;
 use std::env;
 use std::fs;

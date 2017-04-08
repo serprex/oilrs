@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use fnv::FnvHashMap;
 use rand::{thread_rng, Rng};
 use rand::distributions::{IndependentSample, Range};
+use super::stdlib::gen_libs;
 use super::value::{is_num, num_gtz, Value, ValueAsChars};
 
 pub struct Tape<'a> {
@@ -133,28 +134,73 @@ impl<'a> Tape<'a> {
 			_ => self.step(),
 		}
 	}
-	pub fn op14(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
+	fn mk_child<'b>(&'b mut self, path: &'b Path, oi: Value, ii: Value) -> TapeChild<'b, 'a>
+		where 'a: 'b
+	{
+		TapeChild::<'b, 'a> {
+			tape: Tape::<'b>::new(path.parent().unwrap_or_else(|| Path::new(""))),
+			parent: self,
+			oidx: oi,
+			iidx: ii,
+		}
+	}
+	pub fn op14(&mut self, stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
 		self.step();
-		let path = match self.read_val(&self.idx) {
-			Value::S(ref x) => self.root.join(&x[..]),
-			Value::I(x) => self.root.join(&x.to_string()),
-			Value::C(x) => self.root.join(x.encode_utf8(&mut [0u8; 4])),
-		};
+		let pathidx = self.idx.clone();
 		self.step();
 		let oi = self.read_int();
 		self.step();
 		let ii = self.read_int();
 		let cachetape;
-		{
-			let mut child = TapeChild {
-				tape: Tape::new(path.parent().unwrap_or_else(|| Path::new(""))),
-				parent: self,
-				oidx: oi,
-				iidx: ii,
+		let path = {
+			let path = match self.read_val(&pathidx) {
+				Value::S(ref x) => {
+					let fpath = Path::new(&x[..]);
+					if fpath.is_file() {
+						self.root.join(fpath)
+					} else {
+						if let Some(lib) = stdlib.get(&x[..]).map(|m| m.clone()) {
+							let mut child = self.mk_child(fpath, oi, ii);
+							child.tape.tape = lib;
+							child.run(stdlib, modcache);
+						}
+						return
+					}
+				},
+				Value::I(x) => {
+					let xs = x.to_string();
+					let fpath = Path::new(&xs);
+					if fpath.is_file() {
+						self.root.join(fpath)
+					} else {
+						if let Some(lib) = stdlib.get(&xs[..]).map(|m| m.clone()) {
+							let mut child = self.mk_child(fpath, oi, ii);
+							child.tape.tape = lib;
+							child.run(stdlib, modcache);
+						}
+						return
+					}
+				},
+				Value::C(x) => {
+					let mut buf = [0u8; 4];
+					let cx = x.encode_utf8(&mut buf);
+					let fpath = Path::new(cx);
+					if fpath.is_file() {
+						self.root.join(fpath)
+					} else {
+						if let Some(lib) = stdlib.get(cx).map(|m| m.clone()) {
+							let mut child = self.mk_child(fpath, oi, ii);
+							child.tape.tape = lib;
+							child.run(stdlib, modcache);
+						}
+						return
+					}
+				},
 			};
-			if let Some(m) = modcache.get_mut(&path).map(|m| m.clone()) {
+			let mut child = self.mk_child(&path, oi, ii);
+			if let Some(m) = modcache.get(&path).map(|m| m.clone()) {
 				child.tape.tape = m;
-				child.run(modcache);
+				child.run(stdlib, modcache);
 				return
 			}
 			else if let Ok(f) = fs::File::open(&path) {
@@ -168,11 +214,12 @@ impl<'a> Tape<'a> {
 					idx += 1;
 				}
 				cachetape = child.tape.tape.clone();
-				child.run(modcache);
+				child.run(stdlib, modcache);
+				path.to_owned()
 			} else {
 				return
 			}
-		}
+		};
 		modcache.insert(path, cachetape);
 	}
 	pub fn op15(&mut self) {
@@ -244,6 +291,7 @@ impl<'a> Tape<'a> {
 	pub fn run(&mut self)
 	{
 		let mut modcache = FnvHashMap::default();
+		let stdlib = gen_libs();
 		loop {
 			match self.tape.get(&self.idx) {
 				Some(&Value::I(cell)) => {
@@ -288,7 +336,7 @@ impl<'a> Tape<'a> {
 						11 => println!(""),
 						12 => self.op12(),
 						13 => self.op13(),
-						14 => self.op14(&mut modcache),
+						14 => self.op14(&stdlib, &mut modcache),
 						15 => self.op15(),
 						16 => self.op16(),
 						17 => self.op17(),
@@ -313,7 +361,7 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 	pub fn read_int(&self) -> Value {
 		self.tape.read_int()
 	}
-	pub fn run(&mut self, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>)
+	pub fn run(&mut self, stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>)
 	{
 		loop {
 			match self.tape.tape.get(&self.tape.idx) {
@@ -365,7 +413,7 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 						},
 						12 => self.tape.op12(),
 						13 => self.tape.op13(),
-						14 => self.tape.op14(modcache),
+						14 => self.tape.op14(stdlib, modcache),
 						15 => self.tape.op15(),
 						16 => self.tape.op16(),
 						17 => self.tape.op17(),
