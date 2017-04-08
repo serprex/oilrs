@@ -17,7 +17,7 @@ pub struct Tape<'a> {
 	pub idx: Value,
 	pub tape: FnvHashMap<Value, Value>,
 	pub dir: bool,
-	pub root: &'a Path,
+	pub root: Option<&'a Path>,
 }
 
 struct TapeChild<'a, 'b: 'a> {
@@ -28,7 +28,7 @@ struct TapeChild<'a, 'b: 'a> {
 }
 
 impl<'a> Tape<'a> {
-	pub fn new(root: &'a Path) -> Tape<'a> {
+	pub fn new(root: Option<&'a Path>) -> Tape<'a> {
 		Tape {
 			idx: Value::I(0),
 			dir: true,
@@ -134,16 +134,18 @@ impl<'a> Tape<'a> {
 			_ => self.step(),
 		}
 	}
-	fn mk_child<'b>(&'b mut self, path: &'b Path, oi: Value, ii: Value) -> TapeChild<'b, 'a>
+
+	fn mk_child<'b>(&'b mut self, path: Option<&'b Path>, oi: Value, ii: Value) -> TapeChild<'b, 'a>
 		where 'a: 'b
 	{
 		TapeChild::<'b, 'a> {
-			tape: Tape::<'b>::new(path.parent().unwrap_or_else(|| Path::new(""))),
+			tape: Tape::<'b>::new(path),
 			parent: self,
 			oidx: oi,
 			iidx: ii,
 		}
 	}
+
 	pub fn op14(&mut self, stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
 		self.step();
 		let pathidx = self.idx.clone();
@@ -156,11 +158,11 @@ impl<'a> Tape<'a> {
 			let path = match self.read_val(&pathidx) {
 				Value::S(ref x) => {
 					let fpath = Path::new(&x[..]);
-					if fpath.is_file() {
-						self.root.join(fpath)
+					if self.root.is_some() && fpath.is_file() {
+						self.root.unwrap().join(fpath)
 					} else {
 						if let Some(lib) = stdlib.get(&x[..]).map(|m| m.clone()) {
-							let mut child = self.mk_child(fpath, oi, ii);
+							let mut child = self.mk_child(None, oi, ii);
 							child.tape.tape = lib;
 							child.run(stdlib, modcache);
 						}
@@ -170,11 +172,11 @@ impl<'a> Tape<'a> {
 				Value::I(x) => {
 					let xs = x.to_string();
 					let fpath = Path::new(&xs);
-					if fpath.is_file() {
-						self.root.join(fpath)
+					if self.root.is_some() && fpath.is_file() {
+						self.root.unwrap().join(fpath)
 					} else {
 						if let Some(lib) = stdlib.get(&xs[..]).map(|m| m.clone()) {
-							let mut child = self.mk_child(fpath, oi, ii);
+							let mut child = self.mk_child(None, oi, ii);
 							child.tape.tape = lib;
 							child.run(stdlib, modcache);
 						}
@@ -185,11 +187,11 @@ impl<'a> Tape<'a> {
 					let mut buf = [0u8; 4];
 					let cx = x.encode_utf8(&mut buf);
 					let fpath = Path::new(cx);
-					if fpath.is_file() {
-						self.root.join(fpath)
+					if self.root.is_some() && fpath.is_file() {
+						self.root.unwrap().join(fpath)
 					} else {
 						if let Some(lib) = stdlib.get(cx).map(|m| m.clone()) {
-							let mut child = self.mk_child(fpath, oi, ii);
+							let mut child = self.mk_child(None, oi, ii);
 							child.tape.tape = lib;
 							child.run(stdlib, modcache);
 						}
@@ -197,7 +199,7 @@ impl<'a> Tape<'a> {
 					}
 				},
 			};
-			let mut child = self.mk_child(&path, oi, ii);
+			let mut child = self.mk_child(path.parent(), oi, ii);
 			if let Some(m) = modcache.get(&path).map(|m| m.clone()) {
 				child.tape.tape = m;
 				child.run(stdlib, modcache);

@@ -80,7 +80,7 @@ fn main() {
 			}
 		} else {
 			let path = Path::new(&a);
-			let mut tape = Tape::new(path.parent().unwrap_or_else(|| Path::new("")));
+			let mut tape = Tape::new(path.parent());
 			if let Ok(f) = fs::File::open(&path) {
 				let mut f = BufReader::new(f);
 				let mut line = String::new();
