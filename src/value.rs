@@ -226,6 +226,14 @@ fn i64_parse(s: &str) -> Option<i64> {
 }
 
 impl Value {
+	pub fn advance(&mut self, direction: bool) {
+		if direction {
+			self.incr()
+		} else {
+			self.decr()
+		}
+	}
+
 	pub fn incr(&mut self) {
 		let newx;
 		loop {

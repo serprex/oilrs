@@ -37,11 +37,7 @@ impl<'a> Tape<'a> {
 		}
 	}
 	pub fn step(&mut self) {
-		if self.dir {
-			self.idx.incr()
-		} else {
-			self.idx.decr()
-		}
+		self.idx.advance(self.dir)
 	}
 	pub fn read_val(&self, i: &Value) -> Value {
 		if let Some(x) = self.tape.get(&i) {
@@ -112,7 +108,7 @@ impl<'a> Tape<'a> {
 		let mut b = self.read_int();
 		self.tape.insert(b.clone(), Value::I(alen as i64));
 		for ch in aiter {
-			b.incr();
+			b.advance(self.dir);
 			self.tape.insert(b.clone(), Value::from(ch));
 		}
 	}
@@ -127,7 +123,7 @@ impl<'a> Tape<'a> {
 				let mut s = String::new();
 				for _ in 0..b {
 					write!(s, "{}", self.read_val(&a)).ok();
-					a.incr();
+					a.advance(self.dir);
 				}
 				self.tape.insert(c, Value::from(s));
 			}
@@ -265,7 +261,7 @@ impl<'a> Tape<'a> {
 		let mut b = self.read_int();
 		self.tape.insert(b.clone(), Value::I(alen as i64));
 		for ch in aiter {
-			b.incr();
+			b.advance(self.dir);
 			self.tape.insert(b.clone(), Value::I(ch as u32 as i64));
 		}
 	}
@@ -283,7 +279,7 @@ impl<'a> Tape<'a> {
 						Value::I(x) if x >= 0 && x <= 0x10ffff => char::from_u32(x as u32).unwrap_or('\u{fffd}'),
 						_ => '\u{fffd}'
 					});
-					a.incr();
+					a.advance(self.dir);
 				}
 				self.tape.insert(c, Value::from(s));
 			}
@@ -377,11 +373,7 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 							let a = self.read_int();
 							let a = self.read_val(&a);
 							self.parent.tape.insert(self.oidx.clone(), a);
-							if self.parent.dir {
-								self.oidx.incr();
-							} else {
-								self.oidx.decr();
-							}
+							self.oidx.advance(self.parent.dir);
 						}
 						5 => {
 							self.step();
@@ -392,11 +384,7 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 								Value::I(0)
 							};
 							self.tape.tape.insert(a, v);
-							if self.parent.dir {
-								self.iidx.incr();
-							} else {
-								self.iidx.decr();
-							}
+							self.iidx.advance(self.parent.dir);
 						},
 						6 => {
 							self.step();
