@@ -1,4 +1,4 @@
-use fnv::FnvHashMap; 
+use fnv::FnvHashMap;
 use value::Value;
 
 fn parse_lib(src: &str) -> FnvHashMap<Value, Value> {

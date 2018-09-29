@@ -1,14 +1,14 @@
 extern crate fnv;
 extern crate rand;
+mod stdlib;
 mod tape;
 mod value;
-mod stdlib;
+use fnv::FnvHashMap;
 use std::borrow::Cow;
 use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use fnv::FnvHashMap;
 use tape::Tape;
 use value::Value;
 
@@ -31,7 +31,7 @@ fn main() {
 							"output" | "write" => Some("4"),
 							"user_input" | "read" => Some("5"),
 							"jump" | "jmp" => Some("6"),
-							"relative_jump" | "jr"  => Some("7"),
+							"relative_jump" | "jr" => Some("7"),
 							"increment" | "+" => Some("8"),
 							"decrement" | "-" => Some("9"),
 							"conditional_jump" | "je" => Some("10"),
@@ -49,14 +49,16 @@ fn main() {
 							labelfill.push(lineno);
 							Cow::Owned(line)
 						} else if line.starts_with(':') {
-							if let Some(oldidx) = labels.insert(String::from(&line[1..]), lineno.to_string()) {
+							if let Some(oldidx) =
+								labels.insert(String::from(&line[1..]), lineno.to_string())
+							{
 								println!("Duplicate labels: {} {}", oldidx, lineno);
 							}
-							continue
+							continue;
 						} else if line.starts_with('"') {
 							Cow::Owned(String::from(&line[1..]))
 						} else if line.starts_with('#') {
-							continue
+							continue;
 						} else {
 							Cow::Owned(line)
 						});
@@ -69,7 +71,7 @@ fn main() {
 							labelidx += 1;
 							if let Some(lineno) = labels.get(&line[1..]) {
 								writeln!(output, "{}", lineno).ok();
-								continue
+								continue;
 							} else {
 								println!("Unknown label: {}", &line[1..]);
 							}
@@ -86,8 +88,11 @@ fn main() {
 				let mut line = String::new();
 				let mut idx = 0;
 				while let Ok(n) = f.read_line(&mut line) {
-					if n == 0 { break }
-					tape.tape.insert(Value::I(idx), Value::from(line.trim_right_matches('\n')));
+					if n == 0 {
+						break;
+					}
+					tape.tape
+						.insert(Value::I(idx), Value::from(line.trim_right_matches('\n')));
 					line.clear();
 					idx += 1;
 				}

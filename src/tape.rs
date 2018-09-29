@@ -1,17 +1,17 @@
-use std::collections::hash_map::Entry;
-use std::cmp::{Ordering, Ord};
-use std::char;
-use std::fs;
-use std::fmt::Write;
-use std::i64;
-use std::io::{self, BufRead, BufReader};
-use std::rc::Rc;
-use std::path::{Path, PathBuf};
-use fnv::FnvHashMap;
-use rand::{thread_rng, Rng};
-use rand::distributions::{IndependentSample, Range};
 use super::stdlib::gen_libs;
 use super::value::{is_num, num_gtz, Value, ValueAsChars};
+use fnv::FnvHashMap;
+use rand::distributions::{Distribution, Range};
+use rand::{thread_rng, Rng};
+use std::char;
+use std::cmp::{Ord, Ordering};
+use std::collections::hash_map::Entry;
+use std::fmt::Write;
+use std::fs;
+use std::i64;
+use std::io::{self, BufRead, BufReader};
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 pub struct Tape<'a> {
 	pub idx: Value,
@@ -75,7 +75,9 @@ impl<'a> Tape<'a> {
 		let a = self.read_int();
 		match self.tape.entry(a) {
 			Entry::Occupied(mut ent) => ent.get_mut().incr(),
-			Entry::Vacant(ent) => { ent.insert(Value::I(1)); },
+			Entry::Vacant(ent) => {
+				ent.insert(Value::I(1));
+			}
 		}
 	}
 	pub fn op9(&mut self) {
@@ -83,7 +85,9 @@ impl<'a> Tape<'a> {
 		let a = self.read_int();
 		match self.tape.entry(a) {
 			Entry::Occupied(mut ent) => ent.get_mut().decr(),
-			Entry::Vacant(ent) => { ent.insert(Value::I(-1)); },
+			Entry::Vacant(ent) => {
+				ent.insert(Value::I(-1));
+			}
 		}
 	}
 	pub fn op10(&mut self) {
@@ -132,7 +136,8 @@ impl<'a> Tape<'a> {
 	}
 
 	fn mk_child<'b>(&'b mut self, path: Option<&'b Path>, oi: Value, ii: Value) -> TapeChild<'b, 'a>
-		where 'a: 'b
+	where
+		'a: 'b,
 	{
 		TapeChild::<'b, 'a> {
 			tape: Tape::<'b>::new(path),
@@ -142,7 +147,11 @@ impl<'a> Tape<'a> {
 		}
 	}
 
-	pub fn op14(&mut self, stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>) {
+	pub fn op14(
+		&mut self,
+		stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>,
+		modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>,
+	) {
 		self.step();
 		let pathidx = self.idx.clone();
 		self.step();
@@ -162,9 +171,9 @@ impl<'a> Tape<'a> {
 							child.tape.tape = lib;
 							child.run(stdlib, modcache);
 						}
-						return
+						return;
 					}
-				},
+				}
 				Value::I(x) => {
 					let xs = x.to_string();
 					let fpath = Path::new(&xs);
@@ -176,9 +185,9 @@ impl<'a> Tape<'a> {
 							child.tape.tape = lib;
 							child.run(stdlib, modcache);
 						}
-						return
+						return;
 					}
-				},
+				}
 				Value::C(x) => {
 					let mut buf = [0u8; 4];
 					let cx = x.encode_utf8(&mut buf);
@@ -191,23 +200,27 @@ impl<'a> Tape<'a> {
 							child.tape.tape = lib;
 							child.run(stdlib, modcache);
 						}
-						return
+						return;
 					}
-				},
+				}
 			};
 			let mut child = self.mk_child(path.parent(), oi, ii);
 			if let Some(m) = modcache.get(&path).map(|m| m.clone()) {
 				child.tape.tape = m;
 				child.run(stdlib, modcache);
-				return
-			}
-			else if let Ok(f) = fs::File::open(&path) {
+				return;
+			} else if let Ok(f) = fs::File::open(&path) {
 				let mut f = BufReader::new(f);
 				let mut line = String::new();
 				let mut idx = 0;
 				while let Ok(n) = f.read_line(&mut line) {
-					if n == 0 { break }
-					child.tape.tape.insert(Value::I(idx), Value::from(line.trim_right_matches('\n')));
+					if n == 0 {
+						break;
+					}
+					child
+						.tape
+						.tape
+						.insert(Value::I(idx), Value::from(line.trim_right_matches('\n')));
 					line.clear();
 					idx += 1;
 				}
@@ -215,7 +228,7 @@ impl<'a> Tape<'a> {
 				child.run(stdlib, modcache);
 				path.to_owned()
 			} else {
-				return
+				return;
 			}
 		};
 		modcache.insert(path, cachetape);
@@ -228,8 +241,12 @@ impl<'a> Tape<'a> {
 				let val = ent.get_mut();
 				let mut rng = thread_rng();
 				match *val {
-					Value::I(ref mut x @ i64::MAX) => *x = rng.gen_range(0, i64::MAX as u64 + 1) as i64,
-					Value::I(ref mut x) => if *x > 0 { *x = rng.gen_range(0, *x+1) },
+					Value::I(ref mut x @ i64::MAX) => {
+						*x = rng.gen_range(0, i64::MAX as u64 + 1) as i64
+					}
+					Value::I(ref mut x) => if *x > 0 {
+						*x = rng.gen_range(0, *x + 1)
+					},
 					Value::S(ref mut x) if num_gtz(x) => {
 						let range9 = Range::new(b'0', b'9' + 1);
 						let s = Rc::make_mut(x);
@@ -237,18 +254,18 @@ impl<'a> Tape<'a> {
 						let mut oldb = b.clone();
 						while {
 							for c in b.iter_mut() {
-								*c = range9.ind_sample(&mut rng);
+								*c = range9.sample(&mut rng);
 							}
 							b.cmp(&&mut oldb) == Ordering::Greater
-						} { }
+						} {}
 						while b[0] == b'0' {
 							b.swap_remove(0);
 						}
-					},
+					}
 					Value::S(ref x) if is_num(x) => (),
 					_ => *val = Value::I(0),
 				}
-			},
+			}
 			Entry::Vacant(_) => (),
 		}
 	}
@@ -276,8 +293,10 @@ impl<'a> Tape<'a> {
 				let mut s = String::with_capacity(b as usize);
 				for _ in 0..b {
 					s.push(match self.read_val(&a) {
-						Value::I(x) if x >= 0 && x <= 0x10ffff => char::from_u32(x as u32).unwrap_or('\u{fffd}'),
-						_ => '\u{fffd}'
+						Value::I(x) if x >= 0 && x <= 0x10ffff => {
+							char::from_u32(x as u32).unwrap_or('\u{fffd}')
+						}
+						_ => '\u{fffd}',
 					});
 					a.advance(self.dir);
 				}
@@ -286,60 +305,57 @@ impl<'a> Tape<'a> {
 			_ => self.step(),
 		}
 	}
-	pub fn run(&mut self)
-	{
+	pub fn run(&mut self) {
 		let mut modcache = FnvHashMap::default();
 		let stdlib = gen_libs();
 		loop {
 			match self.tape.get(&self.idx) {
-				Some(&Value::I(cell)) => {
-					match cell {
-						1 => self.op1(),
-						2 => self.dir ^= true,
-						3 => return,
-						4 => {
-							self.step();
-							let a = self.read_int();
-							print!("{}", self.read_val(&a));
-						}
-						5 => {
-							(&mut io::stdout() as &mut io::Write).flush().ok();
-							let stdin = io::stdin();
-							let mut inlock = stdin.lock();
-							let mut s = String::new();
-							inlock.read_line(&mut s).ok();
-							if s.ends_with('\n') {
-								let len = s.len() - 1;
-								s.truncate(len);
-							}
-							self.step();
-							let a = self.read_int();
-							self.tape.insert(a, Value::from(s));
-						},
-						6 => {
-							self.step();
-							self.idx = self.read_int();
-							continue
-						},
-						7 => {
-							self.op7();
-							continue
-						},
-						8 => self.op8(),
-						9 => self.op9(),
-						10 => {
-							self.op10();
-							continue
-						},
-						11 => println!(""),
-						12 => self.op12(),
-						13 => self.op13(),
-						14 => self.op14(&stdlib, &mut modcache),
-						15 => self.op15(),
-						16 => self.op16(),
-						17 => self.op17(),
-						_ => (),
+				Some(&Value::I(cell)) => match cell {
+					1 => self.op1(),
+					2 => self.dir ^= true,
+					3 => return,
+					4 => {
+						self.step();
+						let a = self.read_int();
+						print!("{}", self.read_val(&a));
 					}
+					5 => {
+						(&mut io::stdout() as &mut io::Write).flush().ok();
+						let stdin = io::stdin();
+						let mut inlock = stdin.lock();
+						let mut s = String::new();
+						inlock.read_line(&mut s).ok();
+						if s.ends_with('\n') {
+							let len = s.len() - 1;
+							s.truncate(len);
+						}
+						self.step();
+						let a = self.read_int();
+						self.tape.insert(a, Value::from(s));
+					}
+					6 => {
+						self.step();
+						self.idx = self.read_int();
+						continue;
+					}
+					7 => {
+						self.op7();
+						continue;
+					}
+					8 => self.op8(),
+					9 => self.op9(),
+					10 => {
+						self.op10();
+						continue;
+					}
+					11 => println!(""),
+					12 => self.op12(),
+					13 => self.op13(),
+					14 => self.op14(&stdlib, &mut modcache),
+					15 => self.op15(),
+					16 => self.op16(),
+					17 => self.op17(),
+					_ => (),
 				},
 				Some(_) => (),
 				_ => return,
@@ -359,56 +375,57 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 	pub fn read_int(&self) -> Value {
 		self.tape.read_int()
 	}
-	pub fn run(&mut self, stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>, modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>)
-	{
+	pub fn run(
+		&mut self,
+		stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>,
+		modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>,
+	) {
 		loop {
 			match self.tape.tape.get(&self.tape.idx) {
-				Some(&Value::I(cell)) => {
-					match cell {
-						1 => self.tape.op1(),
-						2 => self.tape.dir ^= true,
-						3 => return,
-						4 => {
-							self.step();
-							let a = self.read_int();
-							let a = self.read_val(&a);
-							self.parent.tape.insert(self.oidx.clone(), a);
-							self.oidx.advance(self.parent.dir);
-						}
-						5 => {
-							self.step();
-							let a = self.read_int();
-							let v = if let Some(x) = self.parent.tape.get(&self.iidx) {
-								x.clone()
-							} else {
-								Value::I(0)
-							};
-							self.tape.tape.insert(a, v);
-							self.iidx.advance(self.parent.dir);
-						},
-						6 => {
-							self.step();
-							self.tape.idx = self.read_int();
-							continue
-						},
-						7 => {
-							self.tape.op7();
-							continue
-						},
-						8 => self.tape.op8(),
-						9 => self.tape.op9(),
-						10 => {
-							self.tape.op10();
-							continue
-						},
-						12 => self.tape.op12(),
-						13 => self.tape.op13(),
-						14 => self.tape.op14(stdlib, modcache),
-						15 => self.tape.op15(),
-						16 => self.tape.op16(),
-						17 => self.tape.op17(),
-						_ => (),
+				Some(&Value::I(cell)) => match cell {
+					1 => self.tape.op1(),
+					2 => self.tape.dir ^= true,
+					3 => return,
+					4 => {
+						self.step();
+						let a = self.read_int();
+						let a = self.read_val(&a);
+						self.parent.tape.insert(self.oidx.clone(), a);
+						self.oidx.advance(self.parent.dir);
 					}
+					5 => {
+						self.step();
+						let a = self.read_int();
+						let v = if let Some(x) = self.parent.tape.get(&self.iidx) {
+							x.clone()
+						} else {
+							Value::I(0)
+						};
+						self.tape.tape.insert(a, v);
+						self.iidx.advance(self.parent.dir);
+					}
+					6 => {
+						self.step();
+						self.tape.idx = self.read_int();
+						continue;
+					}
+					7 => {
+						self.tape.op7();
+						continue;
+					}
+					8 => self.tape.op8(),
+					9 => self.tape.op9(),
+					10 => {
+						self.tape.op10();
+						continue;
+					}
+					12 => self.tape.op12(),
+					13 => self.tape.op13(),
+					14 => self.tape.op14(stdlib, modcache),
+					15 => self.tape.op15(),
+					16 => self.tape.op16(),
+					17 => self.tape.op17(),
+					_ => (),
 				},
 				Some(_) => (),
 				_ => return,

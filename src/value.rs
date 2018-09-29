@@ -1,6 +1,6 @@
-use std::cmp::{self, Ordering, Ord};
-use std::i64;
+use std::cmp::{self, Ord, Ordering};
 use std::fmt::{self, Display};
+use std::i64;
 use std::mem;
 use std::rc::Rc;
 use std::str::Chars;
@@ -22,27 +22,35 @@ pub enum ValueAsChars<'a> {
 impl<'a> ValueAsChars<'a> {
 	pub fn new(val: &'a Value) -> (ValueAsChars, usize) {
 		match *val {
-			Value::I(i64::MIN) => (ValueAsChars::I(
-				[20, b'8',b'0',b'8',b'5',b'7',b'7',b'4',b'7',b'8',b'6',
-				b'3',b'0',b'2',b'7',b'3',b'3',b'2',b'2',b'9',b'-']), 20),
+			Value::I(i64::MIN) => (
+				ValueAsChars::I([
+					20, b'8', b'0', b'8', b'5', b'7', b'7', b'4', b'7', b'8', b'6', b'3', b'0',
+					b'2', b'7', b'3', b'3', b'2', b'2', b'9', b'-',
+				]),
+				20,
+			),
 			Value::I(0) => (ValueAsChars::C('0'), 1),
 			Value::I(mut x) => {
 				let mut buf: [u8; 21] = unsafe { mem::uninitialized() };
 				let neg = x < 0;
-				if neg { x = -x };
+				if neg {
+					x = -x
+				};
 				let mut xlen = 1;
 				while {
 					buf[xlen] = b'0' + (x % 10) as u8;
 					x /= 10;
 					x != 0
-				} { xlen += 1 }
+				} {
+					xlen += 1
+				}
 				if neg {
 					xlen += 1;
 					buf[xlen] = b'-';
 				}
 				buf[0] = xlen as u8;
 				(ValueAsChars::I(buf), xlen)
-			},
+			}
 			Value::S(ref s) => (ValueAsChars::S(s.chars()), s.chars().count()),
 			Value::C(c) => (ValueAsChars::C(c), 1),
 		}
@@ -55,17 +63,18 @@ impl<'a> Iterator for ValueAsChars<'a> {
 		match *self {
 			ValueAsChars::S(ref mut chs) => chs.next(),
 			ValueAsChars::I(ref mut xs) => {
-				if xs[0] == 0 { None }
-				else {
+				if xs[0] == 0 {
+					None
+				} else {
 					let x = unsafe { *xs.get_unchecked(xs[0] as usize) };
 					xs[0] -= 1;
 					Some(x as char)
 				}
-			},
+			}
 			ValueAsChars::C(c) => {
 				*self = ValueAsChars::None;
 				Some(c)
-			},
+			}
 			ValueAsChars::None => None,
 		}
 	}
@@ -87,7 +96,7 @@ fn num_decr_core(s: &mut Vec<u8>, start: usize) {
 			*n = b'9';
 		} else {
 			*n -= 1;
-			break
+			break;
 		}
 	}
 	if s[start] == b'0' {
@@ -101,7 +110,7 @@ fn num_incr_core(s: &mut Vec<u8>, start: usize) {
 			*n = b'0';
 		} else {
 			*n += 1;
-			return
+			return;
 		}
 	}
 	s.insert(start, b'1');
@@ -113,13 +122,23 @@ fn num_incr_by_core(x: &[u8], y: &[u8], n: bool) -> Value {
 	let mut z = Vec::with_capacity(xylen + 2);
 	let mut carry = 0;
 	for i in 0..xylen {
-		let xc = if i >= xlen - 1 { 0 } else { x[xlen - i - 1] - b'0' };
-		let yc = if i >= ylen - 1 { 0 } else { x[ylen - i - 1] - b'0' };
+		let xc = if i >= xlen - 1 {
+			0
+		} else {
+			x[xlen - i - 1] - b'0'
+		};
+		let yc = if i >= ylen - 1 {
+			0
+		} else {
+			x[ylen - i - 1] - b'0'
+		};
 		let n = xc + yc + carry;
 		z.push(if n > 10 {
 			carry = 1;
 			n - (b'0' + 10)
-		} else { n - b'0' });
+		} else {
+			n - b'0'
+		});
 	}
 	if carry == 1 {
 		z.push(b'1');
@@ -137,8 +156,16 @@ fn num_decr_by_core(x: &[u8], y: &[u8], n: bool) -> Value {
 	let mut z = Vec::with_capacity(xylen);
 	let mut carry = 0;
 	for i in 0..xylen {
-		let xc = if i >= xlen - 1 { 0 } else { x[xlen - i - 1] - b'0' };
-		let yc = if i >= ylen - 1 { 0 } else { x[ylen - i - 1] - b'0' } + carry;
+		let xc = if i >= xlen - 1 {
+			0
+		} else {
+			x[xlen - i - 1] - b'0'
+		};
+		let yc = if i >= ylen - 1 {
+			0
+		} else {
+			x[ylen - i - 1] - b'0'
+		} + carry;
 		if yc > xc {
 			z.push((b'0' + 10) - (yc - xc));
 			carry = 1;
@@ -157,9 +184,13 @@ fn num_decr_by_core(x: &[u8], y: &[u8], n: bool) -> Value {
 fn unum_cmp(a: &[u8], b: &[u8]) -> Ordering {
 	let alen = a.len();
 	let blen = b.len();
-	if alen > blen { Ordering::Greater }
-	else if blen > alen { Ordering::Less }
-	else { a.cmp(b) }
+	if alen > blen {
+		Ordering::Greater
+	} else if blen > alen {
+		Ordering::Less
+	} else {
+		a.cmp(b)
+	}
 }
 
 pub fn num_gtz(s: &str) -> bool {
@@ -186,7 +217,7 @@ pub fn is_num(s: &str) -> bool {
 
 fn i64_parse(s: &str) -> Option<i64> {
 	if s == "0" {
-		return Some(0)
+		return Some(0);
 	}
 	let mut chs = s.bytes();
 	let mut first = chs.next();
@@ -201,12 +232,15 @@ fn i64_parse(s: &str) -> Option<i64> {
 	for c in chs {
 		match c {
 			x @ b'0'...b'9' => {
-				if let Some(v10) = val.checked_mul(10).and_then(move|v10| v10.checked_add((x - b'0') as u64)) {
+				if let Some(v10) = val
+					.checked_mul(10)
+					.and_then(move |v10| v10.checked_add((x - b'0') as u64))
+				{
 					val = v10;
 				} else {
 					return None;
 				}
-			},
+			}
 			_ => return None,
 		}
 	}
@@ -238,7 +272,9 @@ impl Value {
 		let newx;
 		loop {
 			match *self {
-				Value::I(i64::MAX) => *self = Value::S(Rc::new(String::from("9223372036854775808"))),
+				Value::I(i64::MAX) => {
+					*self = Value::S(Rc::new(String::from("9223372036854775808")))
+				}
 				Value::I(ref mut x) => *x += 1,
 				Value::S(ref mut x) => {
 					if is_num(&x[..]) {
@@ -253,16 +289,16 @@ impl Value {
 						}
 						if let Some(x) = i64_parse(s) {
 							newx = x;
-							break
+							break;
 						}
 					} else {
 						newx = 1;
-						break
+						break;
 					}
-				},
+				}
 				Value::C(_) => *self = Value::I(1),
 			}
-			return
+			return;
 		}
 		*self = Value::I(newx);
 	}
@@ -271,7 +307,9 @@ impl Value {
 		let newx;
 		loop {
 			match *self {
-				Value::I(i64::MIN) => *self = Value::S(Rc::new(String::from("-9223372036854775809"))),
+				Value::I(i64::MIN) => {
+					*self = Value::S(Rc::new(String::from("-9223372036854775809")))
+				}
 				Value::I(ref mut x) => *x -= 1,
 				Value::S(ref mut x) => {
 					if is_num(&x[..]) {
@@ -286,16 +324,16 @@ impl Value {
 						}
 						if let Some(x) = i64_parse(s) {
 							newx = x;
-							break
+							break;
 						}
 					} else {
 						newx = -1;
-						break
+						break;
 					}
-				},
+				}
 				Value::C(_) => *self = Value::I(-1),
 			}
-			return
+			return;
 		}
 		*self = Value::I(newx);
 	}
@@ -304,7 +342,7 @@ impl Value {
 		match (self, rhs) {
 			(&Value::I(x), &Value::I(y)) => {
 				if let Some(z) = x.checked_add(y) {
-					return Value::I(z)
+					return Value::I(z);
 				}
 			}
 			(_, &Value::S(ref s)) if !is_num(s) => return self.clone(),
@@ -343,7 +381,7 @@ impl Value {
 		match (self, rhs) {
 			(&Value::I(x), &Value::I(y)) => {
 				if let Some(z) = x.checked_sub(y) {
-					return Value::I(z)
+					return Value::I(z);
 				}
 			}
 			(_, &Value::S(ref s)) if !is_num(s) => return self.clone(),
@@ -401,20 +439,28 @@ impl Value {
 
 impl<'a> From<&'a str> for Value {
 	fn from(s: &'a str) -> Value {
-		if let Some(x) = i64_parse(&s) { Value::I(x) }
-		else {
-			if !s.is_empty() && s.chars().nth(1).is_none() { Value::C(s.chars().nth(0).unwrap()) }
-			else { Value::S(Rc::new(String::from(s))) }
+		if let Some(x) = i64_parse(&s) {
+			Value::I(x)
+		} else {
+			if !s.is_empty() && s.chars().nth(1).is_none() {
+				Value::C(s.chars().nth(0).unwrap())
+			} else {
+				Value::S(Rc::new(String::from(s)))
+			}
 		}
 	}
 }
 
 impl From<String> for Value {
 	fn from(s: String) -> Value {
-		if let Some(x) = i64_parse(&s) { Value::I(x) }
-		else {
-			if !s.is_empty() && s.chars().nth(1).is_none() { Value::C(s.chars().nth(0).unwrap()) }
-			else { Value::S(Rc::new(s)) }
+		if let Some(x) = i64_parse(&s) {
+			Value::I(x)
+		} else {
+			if !s.is_empty() && s.chars().nth(1).is_none() {
+				Value::C(s.chars().nth(0).unwrap())
+			} else {
+				Value::S(Rc::new(s))
+			}
 		}
 	}
 }
@@ -427,4 +473,3 @@ impl From<char> for Value {
 		}
 	}
 }
-
