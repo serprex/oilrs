@@ -1,7 +1,7 @@
 use super::stdlib::gen_libs;
 use super::value::{is_num, num_gtz, Value, ValueAsChars};
 use fnv::FnvHashMap;
-use rand::distributions::{Distribution, Range};
+use rand::distributions::{Distribution, uniform};
 use rand::{thread_rng, Rng};
 use std::char;
 use std::cmp::{Ord, Ordering};
@@ -220,7 +220,7 @@ impl<'a> Tape<'a> {
 					child
 						.tape
 						.tape
-						.insert(Value::I(idx), Value::from(line.trim_right_matches('\n')));
+						.insert(Value::I(idx), Value::from(line.trim_end_matches('\n')));
 					line.clear();
 					idx += 1;
 				}
@@ -248,7 +248,7 @@ impl<'a> Tape<'a> {
 						*x = rng.gen_range(0, *x + 1)
 					},
 					Value::S(ref mut x) if num_gtz(x) => {
-						let range9 = Range::new(b'0', b'9' + 1);
+						let range9 = uniform::Uniform::new_inclusive(b'0', b'9');
 						let s = Rc::make_mut(x);
 						let b = unsafe { s.as_mut_vec() };
 						let mut oldb = b.clone();
@@ -320,7 +320,7 @@ impl<'a> Tape<'a> {
 						print!("{}", self.read_val(&a));
 					}
 					5 => {
-						(&mut io::stdout() as &mut io::Write).flush().ok();
+						(&mut io::stdout() as &mut dyn io::Write).flush().ok();
 						let stdin = io::stdin();
 						let mut inlock = stdin.lock();
 						let mut s = String::new();

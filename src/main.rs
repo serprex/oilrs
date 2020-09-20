@@ -92,7 +92,7 @@ fn main() {
 						break;
 					}
 					tape.tape
-						.insert(Value::I(idx), Value::from(line.trim_right_matches('\n')));
+						.insert(Value::I(idx), Value::from(line.trim_end_matches('\n')));
 					line.clear();
 					idx += 1;
 				}

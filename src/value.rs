@@ -196,7 +196,7 @@ fn unum_cmp(a: &[u8], b: &[u8]) -> Ordering {
 pub fn num_gtz(s: &str) -> bool {
 	let mut chs = s.bytes();
 	match chs.next() {
-		Some(b'1'...b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
+		Some(b'1'..=b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
 		_ => false,
 	}
 }
@@ -206,10 +206,10 @@ pub fn is_num(s: &str) -> bool {
 		let mut chs = s.bytes();
 		match chs.next() {
 			Some(b'-') => match chs.next() {
-				Some(b'1'...b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
+				Some(b'1'..=b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
 				_ => false,
 			},
-			Some(b'1'...b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
+			Some(b'1'..=b'9') => chs.all(|c| c >= b'0' && c <= b'9'),
 			_ => false,
 		}
 	}
@@ -226,12 +226,12 @@ fn i64_parse(s: &str) -> Option<i64> {
 		first = chs.next();
 	}
 	let mut val = match first {
-		Some(x @ b'1'...b'9') => (x - b'0') as u64,
+		Some(x @ b'1'..=b'9') => (x - b'0') as u64,
 		_ => return None,
 	};
 	for c in chs {
 		match c {
-			x @ b'0'...b'9' => {
+			x @ b'0'..=b'9' => {
 				if let Some(v10) = val
 					.checked_mul(10)
 					.and_then(move |v10| v10.checked_add((x - b'0') as u64))
@@ -468,7 +468,7 @@ impl From<String> for Value {
 impl From<char> for Value {
 	fn from(c: char) -> Value {
 		match c {
-			'0'...'9' => Value::I((c as u32 - '0' as u32) as i64),
+			'0'..='9' => Value::I((c as u32 - '0' as u32) as i64),
 			_ => Value::C(c),
 		}
 	}
