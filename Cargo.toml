@@ -5,10 +5,11 @@ authors = ["serprex"]
 license = "MIT"
 repository = "https://github.com/serprex/oilrs"
 description = "Implementation of OIL"
+edition = "2018"
 
 [dependencies]
-fnv = "1.0.7"
-rand = "0.7.3"
+fxhash = "0.2"
+rand = "0.7"
 
 [profile.release]
 panic = "abort"

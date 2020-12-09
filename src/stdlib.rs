@@ -1,8 +1,9 @@
-use fnv::FnvHashMap;
-use value::Value;
+use fxhash::FxHashMap;
 
-fn parse_lib(src: &str) -> FnvHashMap<Value, Value> {
-	let mut lib = FnvHashMap::default();
+use crate::value::Value;
+
+fn parse_lib(src: &str) -> FxHashMap<Value, Value> {
+	let mut lib = FxHashMap::default();
 	let mut idx = 0;
 	for line in src.lines() {
 		lib.insert(Value::I(idx), Value::from(line));
@@ -11,8 +12,8 @@ fn parse_lib(src: &str) -> FnvHashMap<Value, Value> {
 	lib
 }
 
-pub fn gen_libs() -> FnvHashMap<&'static str, FnvHashMap<Value, Value>> {
-	let mut libs = FnvHashMap::with_capacity_and_hasher(31, Default::default());
+pub fn gen_libs() -> FxHashMap<&'static str, FxHashMap<Value, Value>> {
+	let mut libs = FxHashMap::with_capacity_and_hasher(31, Default::default());
 	libs.insert("abs", parse_lib(include_str!("lib/abs")));
 	libs.insert("add", parse_lib(include_str!("lib/add")));
 	libs.insert("call", parse_lib(include_str!("lib/call")));

@@ -1,7 +1,7 @@
 use super::stdlib::gen_libs;
 use super::value::{is_num, num_gtz, Value, ValueAsChars};
-use fnv::FnvHashMap;
-use rand::distributions::{Distribution, uniform};
+use fxhash::FxHashMap;
+use rand::distributions::{uniform, Distribution};
 use rand::{thread_rng, Rng};
 use std::char;
 use std::cmp::{Ord, Ordering};
@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 pub struct Tape<'a> {
 	pub idx: Value,
-	pub tape: FnvHashMap<Value, Value>,
+	pub tape: FxHashMap<Value, Value>,
 	pub dir: bool,
 	pub root: Option<&'a Path>,
 }
@@ -32,7 +32,7 @@ impl<'a> Tape<'a> {
 		Tape {
 			idx: Value::I(0),
 			dir: true,
-			tape: FnvHashMap::default(),
+			tape: FxHashMap::default(),
 			root: root,
 		}
 	}
@@ -149,8 +149,8 @@ impl<'a> Tape<'a> {
 
 	pub fn op14(
 		&mut self,
-		stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>,
-		modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>,
+		stdlib: &FxHashMap<&'static str, FxHashMap<Value, Value>>,
+		modcache: &mut FxHashMap<PathBuf, FxHashMap<Value, Value>>,
 	) {
 		self.step();
 		let pathidx = self.idx.clone();
@@ -244,9 +244,11 @@ impl<'a> Tape<'a> {
 					Value::I(ref mut x @ i64::MAX) => {
 						*x = rng.gen_range(0, i64::MAX as u64 + 1) as i64
 					}
-					Value::I(ref mut x) => if *x > 0 {
-						*x = rng.gen_range(0, *x + 1)
-					},
+					Value::I(ref mut x) => {
+						if *x > 0 {
+							*x = rng.gen_range(0, *x + 1)
+						}
+					}
 					Value::S(ref mut x) if num_gtz(x) => {
 						let range9 = uniform::Uniform::new_inclusive(b'0', b'9');
 						let s = Rc::make_mut(x);
@@ -306,7 +308,7 @@ impl<'a> Tape<'a> {
 		}
 	}
 	pub fn run(&mut self) {
-		let mut modcache = FnvHashMap::default();
+		let mut modcache = FxHashMap::default();
 		let stdlib = gen_libs();
 		loop {
 			match self.tape.get(&self.idx) {
@@ -377,8 +379,8 @@ impl<'p, 'pl> TapeChild<'p, 'pl> {
 	}
 	pub fn run(
 		&mut self,
-		stdlib: &FnvHashMap<&'static str, FnvHashMap<Value, Value>>,
-		modcache: &mut FnvHashMap<PathBuf, FnvHashMap<Value, Value>>,
+		stdlib: &FxHashMap<&'static str, FxHashMap<Value, Value>>,
+		modcache: &mut FxHashMap<PathBuf, FxHashMap<Value, Value>>,
 	) {
 		loop {
 			match self.tape.tape.get(&self.tape.idx) {

@@ -1,7 +1,7 @@
 use std::cmp::{self, Ord, Ordering};
 use std::fmt::{self, Display};
 use std::i64;
-use std::mem;
+use std::mem::MaybeUninit;
 use std::rc::Rc;
 use std::str::Chars;
 
@@ -14,7 +14,7 @@ pub enum Value {
 
 pub enum ValueAsChars<'a> {
 	S(Chars<'a>),
-	I([u8; 21]),
+	I([MaybeUninit<u8>; 21]),
 	C(char),
 	None,
 }
@@ -24,21 +24,62 @@ impl<'a> ValueAsChars<'a> {
 		match *val {
 			Value::I(i64::MIN) => (
 				ValueAsChars::I([
-					20, b'8', b'0', b'8', b'5', b'7', b'7', b'4', b'7', b'8', b'6', b'3', b'0',
-					b'2', b'7', b'3', b'3', b'2', b'2', b'9', b'-',
+					MaybeUninit::new(20),
+					MaybeUninit::new(b'8'),
+					MaybeUninit::new(b'0'),
+					MaybeUninit::new(b'8'),
+					MaybeUninit::new(b'5'),
+					MaybeUninit::new(b'7'),
+					MaybeUninit::new(b'7'),
+					MaybeUninit::new(b'4'),
+					MaybeUninit::new(b'7'),
+					MaybeUninit::new(b'8'),
+					MaybeUninit::new(b'6'),
+					MaybeUninit::new(b'3'),
+					MaybeUninit::new(b'0'),
+					MaybeUninit::new(b'2'),
+					MaybeUninit::new(b'7'),
+					MaybeUninit::new(b'3'),
+					MaybeUninit::new(b'3'),
+					MaybeUninit::new(b'2'),
+					MaybeUninit::new(b'2'),
+					MaybeUninit::new(b'9'),
+					MaybeUninit::new(b'-'),
 				]),
 				20,
 			),
 			Value::I(0) => (ValueAsChars::C('0'), 1),
 			Value::I(mut x) => {
-				let mut buf: [u8; 21] = unsafe { mem::uninitialized() };
+				let mut buf: [MaybeUninit<u8>; 21] = [
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+					MaybeUninit::uninit(),
+				];
 				let neg = x < 0;
 				if neg {
 					x = -x
 				};
 				let mut xlen = 1;
 				while {
-					buf[xlen] = b'0' + (x % 10) as u8;
+					unsafe { *buf.get_unchecked_mut(xlen).as_mut_ptr() = b'0' + (x % 10) as u8 };
 					x /= 10;
 					x != 0
 				} {
@@ -46,9 +87,9 @@ impl<'a> ValueAsChars<'a> {
 				}
 				if neg {
 					xlen += 1;
-					buf[xlen] = b'-';
+					unsafe { *buf.get_unchecked_mut(xlen).as_mut_ptr() = b'-' };
 				}
-				buf[0] = xlen as u8;
+				unsafe { *buf[0].as_mut_ptr() = xlen as u8 };
 				(ValueAsChars::I(buf), xlen)
 			}
 			Value::S(ref s) => (ValueAsChars::S(s.chars()), s.chars().count()),
@@ -63,12 +104,15 @@ impl<'a> Iterator for ValueAsChars<'a> {
 		match *self {
 			ValueAsChars::S(ref mut chs) => chs.next(),
 			ValueAsChars::I(ref mut xs) => {
-				if xs[0] == 0 {
+				let idx = unsafe { xs[0].assume_init() } as usize;
+				if idx == 0 {
 					None
 				} else {
-					let x = unsafe { *xs.get_unchecked(xs[0] as usize) };
-					xs[0] -= 1;
-					Some(x as char)
+					unsafe {
+						let x = xs.get_unchecked(idx).assume_init();
+						*xs[0].as_mut_ptr() = (idx - 1) as u8;
+						Some(x as char)
+					}
 				}
 			}
 			ValueAsChars::C(c) => {
