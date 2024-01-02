@@ -242,11 +242,11 @@ impl<'a> Tape<'a> {
 				let mut rng = thread_rng();
 				match *val {
 					Value::I(ref mut x @ i64::MAX) => {
-						*x = rng.gen_range(0, i64::MAX as u64 + 1) as i64
+						*x = rng.gen_range(0..=i64::MAX)
 					}
 					Value::I(ref mut x) => {
 						if *x > 0 {
-							*x = rng.gen_range(0, *x + 1)
+							*x = rng.gen_range(0..=*x)
 						}
 					}
 					Value::S(ref mut x) if num_gtz(x) => {
