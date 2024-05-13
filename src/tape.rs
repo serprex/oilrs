@@ -163,9 +163,14 @@ impl<'a> Tape<'a> {
 			let path = match self.read_val(&pathidx) {
 				Value::S(ref x) => {
 					let fpath = Path::new(&x[..]);
-					if self.root.is_some() && fpath.is_file() {
-						self.root.unwrap().join(fpath)
+					let (path, is_file) = if let Some(root) = self.root {
+						let path = root.join(fpath);
+						let is_file = path.is_file();
+						(path, is_file)
 					} else {
+						(PathBuf::new(), false)
+					};
+					if !is_file {
 						if let Some(lib) = stdlib.get(&x[..]).map(|m| m.clone()) {
 							let mut child = self.mk_child(None, oi, ii);
 							child.tape.tape = lib;
@@ -173,18 +178,14 @@ impl<'a> Tape<'a> {
 						}
 						return;
 					}
+					path
 				}
 				Value::I(x) => {
 					let xs = x.to_string();
 					let fpath = Path::new(&xs);
-					if self.root.is_some() && fpath.is_file() {
-						self.root.unwrap().join(fpath)
+					if let Some(root) = self.root {
+						root.join(fpath)
 					} else {
-						if let Some(lib) = stdlib.get(&xs[..]).map(|m| m.clone()) {
-							let mut child = self.mk_child(None, oi, ii);
-							child.tape.tape = lib;
-							child.run(stdlib, modcache);
-						}
 						return;
 					}
 				}
@@ -192,14 +193,9 @@ impl<'a> Tape<'a> {
 					let mut buf = [0u8; 4];
 					let cx = x.encode_utf8(&mut buf);
 					let fpath = Path::new(cx);
-					if self.root.is_some() && fpath.is_file() {
-						self.root.unwrap().join(fpath)
+					if let Some(root) = self.root {
+						root.join(fpath)
 					} else {
-						if let Some(lib) = stdlib.get(cx).map(|m| m.clone()) {
-							let mut child = self.mk_child(None, oi, ii);
-							child.tape.tape = lib;
-							child.run(stdlib, modcache);
-						}
 						return;
 					}
 				}
@@ -241,9 +237,7 @@ impl<'a> Tape<'a> {
 				let val = ent.get_mut();
 				let mut rng = thread_rng();
 				match *val {
-					Value::I(ref mut x @ i64::MAX) => {
-						*x = rng.gen_range(0..=i64::MAX)
-					}
+					Value::I(ref mut x @ i64::MAX) => *x = rng.gen_range(0..=i64::MAX),
 					Value::I(ref mut x) => {
 						if *x > 0 {
 							*x = rng.gen_range(0..=*x)
